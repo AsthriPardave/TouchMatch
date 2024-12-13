@@ -1,11 +1,7 @@
 #include <LiquidCrystal_I2C.h> // librerias para el control del LCD + I2C
 #include <Wire.h>
 #include <WiFi.h>
-#include <AsyncTCP.h>
 #include <HTTPClient.h>
-#include <Ticker.h>
-
-// Declaraciones globales
 #include <ArduinoJson.h>
 
 //String n;  //numero de 4 digitos
@@ -22,9 +18,6 @@
 #define DISPLAY1 64
 #define DISPLAY2 128
 
-Ticker putScheduler;
-String lastPutBody;
-
 String n;
 String eventData;
 
@@ -33,8 +26,6 @@ struct RGB {  // struct para definir los pines del led RGB
   int green;
   int blue;
 };
-
-int user = -1;
 
 const char* ssid = "LT";
 const char* password = "petrikldeidad";
@@ -135,37 +126,6 @@ int suma (){
   return colorLed + numDisplay;
 }
 
-void sendPut() {
-  if (user != -1) {
-    if (!lastPutBody.isEmpty()) {
-      HTTPClient http;
-      http.begin("http://192.168.169.193:8000/api/esp32/game/points/" + String(user));
-      http.addHeader("Content-Type", "application/json");
-      int httpCode = http.PUT(lastPutBody);
-
-      if (httpCode > 0) {
-        String responseBody = http.getString();
-        StaticJsonDocument<200> doc2;
-        DeserializationError error = deserializeJson(doc2, responseBody);
-        if (error) {
-          Serial.print("Error al analizar JSON: ");
-          Serial.println(error.c_str());
-          return;
-        }
-        // Extraer valores
-        int puntosCorrectos = doc2["good_points"];      // Extrae "good_points"
-        int puntosIncorrectos = doc2["bad_points"];    // Extrae "bad_points"
-        printInfo(puntosCorrectos, puntosIncorrectos);
-      } else {
-        Serial.println("Error en el PUT.");
-      }
-      http.end();
-      lastPutBody = ""; // Limpiar buffer
-    }
-    user = -1;
-  }
-}
-
 // funcion de inicio 
 void setup() {
 
@@ -190,8 +150,10 @@ void setup() {
     Serial.print(".");
   }
   Serial.println("\nWiFi conectado.");
-  putScheduler.attach(.5, sendPut);
+
 }
+
+ // Conexión a la red WiFi
 
 // funcion de bucle principal
 void loop() {
@@ -219,7 +181,7 @@ void loop() {
         shiftOut(SER, SRCLK, MSBFIRST, 0);
         paintMaster('x');
         digitalWrite(RCLK, HIGH);
-        delay(250);
+        delay(100);
 
         if (line.startsWith("data: ")) {
           eventData = line.substring(6); // Extraer el contenido después de "data: "
@@ -227,7 +189,6 @@ void loop() {
           Serial.println(eventData);
         } else {
           // acaba el juego
-          user = -1;
         }
         // Parsear JSON
         StaticJsonDocument<200> doc;
@@ -241,7 +202,7 @@ void loop() {
         // Extraer valores
         int level = doc["level"];          // Extrae "level"
         const char* sequence = doc["sequence"]; // Extrae "sequence"
-        user = doc["user_registration"]; // Extrae "user_registration"
+        int user = doc["user_registration"]; // Extrae "user_registration"
 
         n = String(sequence);
 
@@ -291,18 +252,15 @@ void loop() {
         jsonDoc["point"] = punto;
         jsonDoc["react"] = reactTime;
 
-        //String requestBody;
-
-        serializeJson(jsonDoc, lastPutBody);
-
-        Serial.print(n);
+        String requestBody;
+        serializeJson(jsonDoc, requestBody);
 
         // Realizar solicitud HTTP PUT
-        /* HTTPClient http2;
+        HTTPClient http2;
         http2.begin("http://192.168.169.193:8000/api/esp32/game/points/"+ String(user)); // URL del servidor
         http2.addHeader("Content-Type", "application/json"); // Cabecera para JSON
 
-        int http2ResponseCode = http2.PUT(lasrPutBody); // Enviar datos
+        int http2ResponseCode = http2.PUT(requestBody); // Enviar datos
 
         if (http2ResponseCode > 0) {
           String responseBody = http2.getString();
@@ -323,7 +281,7 @@ void loop() {
           Serial.println(http2ResponseCode);
         }
 
-        http2.end(); // Finalizar conexión HTTP */
+        http2.end(); // Finalizar conexión HTTP
       }
     
     } else {
@@ -349,4 +307,5 @@ void loop() {
       delay(3000);
     }
   } */
+  
 }
